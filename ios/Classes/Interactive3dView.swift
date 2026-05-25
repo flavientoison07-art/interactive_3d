@@ -22,6 +22,7 @@ class Interactive3DPlatformView: NSObject, FlutterPlatformView, FlutterStreamHan
 
     // State
     private var pendingPreselectedEntities: [String]?
+    private var pendingInitialOverrides: [[String: Any]]?
     private var isDisposed = false
 
     init(frame: CGRect, viewId: Int64, messenger: FlutterBinaryMessenger, args: Any?) {
@@ -97,6 +98,10 @@ class Interactive3DPlatformView: NSObject, FlutterPlatformView, FlutterStreamHan
             handleRefreshCacheHighlights(result: result)
         case "removeFromCache":
             handleRemoveFromCache(call, result: result)
+        case "setEntityMaterials":
+            handleSetEntityMaterials(call, result: result)
+        case "resetEntityMaterials":
+            handleResetEntityMaterials(call, result: result)
         case "dispose":
             DispatchQueue.main.async { [weak self] in
                 self?.dispose()
@@ -121,6 +126,7 @@ class Interactive3DPlatformView: NSObject, FlutterPlatformView, FlutterStreamHan
         selection.patchColors = args["patchColors"] as? [[String: Any]]
         selection.clearSelectionsOnHighlight = (args["clearSelectionsOnHighlight"] as? Bool) ?? false
         pendingPreselectedEntities = args["preselectedEntities"] as? [String]
+        pendingInitialOverrides = args["initialMaterialOverrides"] as? [[String: Any]]
 
         // Configure sequence
         if let seqArray = args["selectionSequence"] as? [[String: Any]] {
@@ -171,13 +177,17 @@ class Interactive3DPlatformView: NSObject, FlutterPlatformView, FlutterStreamHan
             do {
                 try self.sceneManager.loadModel(modelBytes: modelBytes)
 
-                // Apply cache highlights
+                // Apply initial overrides before cache/preselections so override
+                // is the deselect target underneath any selection layered above.
+                self.applyInitialOverrides()
+
+                // Apply cache highlights (skips overridden entities internally).
                 if let scene = self.scnView.scene {
                     self.selection.highlightCachedEntities(in: scene)
                 }
                 self.sendCacheSelectionUpdate()
 
-                // Apply preselections
+                // Apply preselections last; selection wins visually.
                 self.applyPreselectedEntities()
 
                 result(nil)
@@ -352,6 +362,67 @@ class Interactive3DPlatformView: NSObject, FlutterPlatformView, FlutterStreamHan
         pendingPreselectedEntities = nil
     }
 
+    // MARK: - Material Overrides
+
+    private func applyInitialOverrides() {
+        guard let entries = pendingInitialOverrides, !entries.isEmpty else { return }
+        applyOverrideEntries(entries)
+        pendingInitialOverrides = nil
+    }
+
+    private func applyOverrideEntries(_ entries: [[String: Any]]) {
+        guard let scene = scnView.scene else { return }
+        for entry in entries {
+            guard let name = entry["name"] as? String else { continue }
+            scene.rootNode.enumerateChildNodes { (node, _) in
+                if node.name == name,
+                   let geometryNode = self.selection.findGeometryNode(in: node) {
+                    var params = entry
+                    params.removeValue(forKey: "name")
+                    self.selection.applyMaterialOverride(to: geometryNode, params: params)
+                }
+            }
+        }
+    }
+
+    private func resetOverrideEntries(_ names: [String]?) {
+        guard let scene = scnView.scene else { return }
+        if let names = names {
+            for name in names {
+                scene.rootNode.enumerateChildNodes { (node, _) in
+                    if node.name == name,
+                       let geometryNode = self.selection.findGeometryNode(in: node) {
+                        self.selection.resetMaterialOverride(geometryNode)
+                    }
+                }
+            }
+        } else {
+            // Reset all: snapshot keys before mutating the dict.
+            for node in Array(selection.overrideParams.keys) {
+                selection.resetMaterialOverride(node)
+            }
+        }
+    }
+
+    private func handleSetEntityMaterials(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let entries = call.arguments as? [[String: Any]] else {
+            result(FlutterError(code: "INVALID_ARGUMENT", message: "overrides list required", details: nil))
+            return
+        }
+        DispatchQueue.main.async { [weak self] in
+            self?.applyOverrideEntries(entries)
+            result(nil)
+        }
+    }
+
+    private func handleResetEntityMaterials(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        let names = call.arguments as? [String]
+        DispatchQueue.main.async { [weak self] in
+            self?.resetOverrideEntries(names)
+            result(nil)
+        }
+    }
+
     // MARK: - Events
 
     private func sendSelectionUpdate() {
@@ -402,5 +473,6 @@ class Interactive3DPlatformView: NSObject, FlutterPlatformView, FlutterStreamHan
         sceneManager.cleanup()
 
         pendingPreselectedEntities = nil
+        pendingInitialOverrides = nil
     }
 }
