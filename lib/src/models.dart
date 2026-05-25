@@ -71,3 +71,42 @@ class EntityData {
 
   EntityData({required this.id, required this.name});
 }
+
+/// A persistent per-entity PBR override applied independently of selection.
+/// Null fields are left untouched; successive calls on the same [name] merge.
+/// Selection wins visually while active; deselect restores the override.
+class MaterialOverride {
+  /// Entity node name in the glTF/GLB.
+  final String name;
+
+  /// RGBA 0.0..1.0. Tints the GLB base color map, does not replace it.
+  final List<double>? color;
+
+  /// 0.0..1.0.
+  final double? metallic;
+
+  /// 0.0..1.0.
+  final double? roughness;
+
+  /// RGB 0.0..1.0. Values above 1.0 allowed for HDR glow.
+  final List<double>? emissive;
+
+  MaterialOverride({
+    required this.name,
+    this.color,
+    this.metallic,
+    this.roughness,
+    this.emissive,
+  })  : assert(color == null || color.length == 4,
+            'color must be RGBA with 4 components'),
+        assert(emissive == null || emissive.length == 3,
+            'emissive must be RGB with 3 components');
+
+  Map<String, dynamic> toMap() => {
+        'name': name,
+        if (color != null) 'color': color,
+        if (metallic != null) 'metallic': metallic,
+        if (roughness != null) 'roughness': roughness,
+        if (emissive != null) 'emissive': emissive,
+      };
+}

@@ -81,4 +81,43 @@ class Interactive3dController {
     _ensureAttached();
     await _state!.removeFromCache(names);
   }
+
+  /// Applies a persistent PBR override to a single entity.
+  /// Null fields keep their prior value; pass any combination of fields.
+  Future<void> setEntityMaterial({
+    required String name,
+    List<double>? color,
+    double? metallic,
+    double? roughness,
+    List<double>? emissive,
+  }) async {
+    _ensureAttached();
+    await _state!.setEntityMaterials([
+      MaterialOverride(
+        name: name,
+        color: color,
+        metallic: metallic,
+        roughness: roughness,
+        emissive: emissive,
+      ),
+    ]);
+  }
+
+  /// Applies persistent PBR overrides to many entities in one call.
+  Future<void> setEntityMaterials(List<MaterialOverride> overrides) async {
+    _ensureAttached();
+    await _state!.setEntityMaterials(overrides);
+  }
+
+  /// Removes the override on [name], restoring the GLB original.
+  Future<void> resetEntityMaterial(String name) async {
+    _ensureAttached();
+    await _state!.resetEntityMaterials([name]);
+  }
+
+  /// Removes all active overrides, restoring every overridden entity.
+  Future<void> resetAllMaterialOverrides() async {
+    _ensureAttached();
+    await _state!.resetEntityMaterials(null);
+  }
 }

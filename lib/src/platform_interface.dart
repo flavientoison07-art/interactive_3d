@@ -42,6 +42,7 @@ abstract class Interactive3dPlatform extends PlatformInterface {
     bool clearSelectionsOnHighlight = false,
     List<SequenceConfig>? selectionSequence,
     List<double>? backgroundColor,
+    List<MaterialOverride>? initialMaterialOverrides,
   });
 
   /// Loads IBL and skybox environment lighting.
@@ -84,6 +85,18 @@ abstract class Interactive3dPlatform extends PlatformInterface {
 
   /// Removes specific entities from the cache by name.
   Future<void> removeFromCache(int textureId, List<String> names);
+
+  /// Applies one or more PBR overrides. Each override merges into per-entity state.
+  Future<void> setEntityMaterials({
+    required int textureId,
+    required List<MaterialOverride> overrides,
+  });
+
+  /// Removes overrides for [names], or all when [names] is null.
+  Future<void> resetEntityMaterials({
+    required int textureId,
+    List<String>? names,
+  });
 
   /// Forwards a touch event to the native renderer.
   Future<void> onTouchEvent({

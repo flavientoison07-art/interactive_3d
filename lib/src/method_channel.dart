@@ -98,6 +98,7 @@ class MethodChannelInteractive3d extends Interactive3dPlatform {
     bool clearSelectionsOnHighlight = false,
     List<SequenceConfig>? selectionSequence,
     List<double>? backgroundColor,
+    List<MaterialOverride>? initialMaterialOverrides,
   }) async {
     Uint8List modelBytes;
     String modelName;
@@ -136,6 +137,30 @@ class MethodChannelInteractive3d extends Interactive3dPlatform {
       'clearSelectionsOnHighlight': clearSelectionsOnHighlight,
       'selectionSequence': selectionSequence?.map((c) => c.toJson()).toList(),
       'backgroundColor': backgroundColor,
+      'initialMaterialOverrides':
+          initialMaterialOverrides?.map((o) => o.toMap()).toList(),
+    });
+  }
+
+  @override
+  Future<void> setEntityMaterials({
+    required int textureId,
+    required List<MaterialOverride> overrides,
+  }) async {
+    await _pluginChannel.invokeMethod('setEntityMaterials', {
+      'textureId': textureId,
+      'overrides': overrides.map((o) => o.toMap()).toList(),
+    });
+  }
+
+  @override
+  Future<void> resetEntityMaterials({
+    required int textureId,
+    List<String>? names,
+  }) async {
+    await _pluginChannel.invokeMethod('resetEntityMaterials', {
+      'textureId': textureId,
+      'names': names,
     });
   }
 

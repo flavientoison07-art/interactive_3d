@@ -95,6 +95,10 @@ class Interactive3d extends StatefulWidget {
   /// Widget displayed while the model is loading.
   final Widget? loadingWidget;
 
+  /// PBR overrides to apply once when the model first loads. Selection wins
+  /// visually; deselect restores the override.
+  final List<MaterialOverride>? initialMaterialOverrides;
+
   const Interactive3d({
     super.key,
     this.modelPath,
@@ -120,6 +124,7 @@ class Interactive3d extends StatefulWidget {
     this.selectionSequence,
     this.backgroundColor = Colors.black,
     this.loadingWidget,
+    this.initialMaterialOverrides,
   });
 
   @override
@@ -274,6 +279,8 @@ class Interactive3dState extends State<Interactive3d> {
         'clearSelectionsOnHighlight': widget.clearSelectionOnHighlight,
         'selectionSequence': widget.selectionSequence?.map((c) => c.toJson()).toList(),
         'backgroundColor': widget.solidBackgroundColor,
+        'initialMaterialOverrides':
+            widget.initialMaterialOverrides?.map((o) => o.toMap()).toList(),
       });
 
       // iOS HDR/EXR background
@@ -367,6 +374,7 @@ class Interactive3dState extends State<Interactive3d> {
       clearSelectionsOnHighlight: widget.clearSelectionOnHighlight,
       selectionSequence: widget.selectionSequence,
       backgroundColor: widget.solidBackgroundColor,
+      initialMaterialOverrides: widget.initialMaterialOverrides,
     );
 
     await _platform!.loadEnvironment(
@@ -497,6 +505,33 @@ class Interactive3dState extends State<Interactive3d> {
     } else {
       if (_platform == null || _textureId == null) return;
       await _platform!.unselectEntities(textureId: _textureId!, entityIds: entityIds);
+    }
+  }
+
+  Future<void> setEntityMaterials(List<MaterialOverride> overrides) async {
+    if (overrides.isEmpty) return;
+    final payload = overrides.map((o) => o.toMap()).toList();
+    if (Platform.isIOS) {
+      await _iosMethodChannel?.invokeMethod('setEntityMaterials', payload);
+    } else {
+      if (_platform == null || _textureId == null) return;
+      await _platform!.setEntityMaterials(
+        textureId: _textureId!,
+        overrides: overrides,
+      );
+    }
+  }
+
+  /// Null [names] resets every active override.
+  Future<void> resetEntityMaterials(List<String>? names) async {
+    if (Platform.isIOS) {
+      await _iosMethodChannel?.invokeMethod('resetEntityMaterials', names);
+    } else {
+      if (_platform == null || _textureId == null) return;
+      await _platform!.resetEntityMaterials(
+        textureId: _textureId!,
+        names: names,
+      );
     }
   }
 
