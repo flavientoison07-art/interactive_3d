@@ -121,13 +121,15 @@ class Interactive3dTextureEntry(
         preselectedEntities: List<String>?, selectionColor: List<Double>?,
         patchColors: List<Map<String, Any>>?, enableCache: Boolean, cacheColor: List<Double>?,
         clearSelectionsOnHighlight: Boolean = false,
-        selectionSequence: List<Map<String, Any>>? = null
+        selectionSequence: List<Map<String, Any>>? = null,
+        initialMaterialOverrides: List<Map<String, Any>>? = null
     ) {
         val op = {
             filamentRenderer?.loadModel(
                 buffer, fileName, resources, preselectedEntities,
                 selectionColor, patchColors, enableCache, cacheColor,
-                clearSelectionsOnHighlight, selectionSequence
+                clearSelectionsOnHighlight, selectionSequence,
+                initialMaterialOverrides
             )
         }
         if (filamentRenderer != null && surfaceProducer?.getSurface()?.isValid == true) {
@@ -163,6 +165,12 @@ class Interactive3dTextureEntry(
 
     fun removeFromCache(names: List<String>) =
         mainHandler.post { filamentRenderer?.removeFromCache(names) }
+
+    fun setEntityMaterials(overrides: List<Map<String, Any>>) =
+        mainHandler.post { filamentRenderer?.setEntityMaterials(overrides) }
+
+    fun resetEntityMaterials(names: List<String>?) =
+        mainHandler.post { filamentRenderer?.resetEntityMaterials(names) }
 
     fun onTap(x: Float, y: Float) =
         mainHandler.post { filamentRenderer?.onTap(x.toInt(), y.toInt()) }
