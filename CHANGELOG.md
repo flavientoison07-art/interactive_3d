@@ -1,7 +1,18 @@
+## 2.1.0
+
+* 14th release of `interactive_3d` — **Runtime PBR overrides** 🎨
+- New controller API: `setEntityMaterial`, `setEntityMaterials`, `resetEntityMaterial`, `resetAllMaterialOverrides`. Apply per-entity color, metallic, roughness, and emissive at runtime, independent of the selection system.
+- New widget param `initialMaterialOverrides` applies overrides once on model load (alongside `preselectedEntities`).
+- New `MaterialOverride` model with partial-update semantics: unspecified fields keep their prior value, successive calls merge.
+- Visual precedence on the clean path: `selection > override > GLB original`. Selection still wins while active; deselect restores the override, not the GLB original.
+- GLB textures are preserved by default; `color` tints them via factor multiplication (Filament `baseColorFactor` on Android, SCNMaterial `multiply` on iOS).
+- Backward compatible. Existing cache, `patchColors`, and `preselectedEntities` continue to work. When both cache and override target the same entity, override wins visually and cache stays in storage; calling `resetEntityMaterial` makes the cache color show again on that entity.
+- Texture upload from bytes is tracked for v2.2.0.
+
 ## 2.0.4
 
 * 13th release of `interactive_3d`
-- Added `selectionSequence` enforcement on Android, matching the existing iOS behavior — taps that violate the configured order are rejected and emit a `selectionRejected` event.
+- Added `selectionSequence` enforcement on Android, matching the existing iOS behavior. Taps that violate the configured order are rejected and emit a `selectionRejected` event.
 
 
 ## 2.0.3
