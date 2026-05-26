@@ -28,6 +28,8 @@
 
 ✅ Selection sequence rules with bidirectional and tied group support.
 
+✅ Runtime PBR material overrides. Apply color, metallic, roughness, and emissive per entity at runtime, independent of selection.
+
 ✅ Device-adaptive quality on Android — MSAA, supersampling, and render quality auto-tuning.
 
 ✅ Adaptive frame pacing — saves battery when model is idle.
@@ -174,6 +176,51 @@ Interactive3d(
 ```
 
 For more information : visit example project.
+
+## Runtime PBR Material Overrides (v2.1.0)
+
+Change color, metallic, roughness, or emissive on any entity at runtime without going through the selection system. GLB textures are preserved, the color tints them rather than replacing.
+
+```dart
+final controller = Interactive3dController();
+
+Interactive3d(
+  controller: controller,
+  modelPath: 'assets/models/Tooth-3.glb',
+  iblPath: 'assets/models/giuseppe_bridge_4k_ibl.ktx',
+  skyboxPath: 'assets/models/giuseppe_bridge_4k_skybox.ktx',
+)
+
+// Apply at runtime (e.g. from a button tap):
+await controller.setEntityMaterial(
+  name: 'Tooth_7',
+  color: [0.85, 0.15, 0.15, 1.0],  // RGBA, tints the GLB texture red
+  metallic: 0.0,
+  roughness: 0.9,
+);
+
+// Restore one entity to GLB original:
+await controller.resetEntityMaterial('Tooth_7');
+
+// Or reset every override at once:
+await controller.resetAllMaterialOverrides();
+```
+
+Apply many overrides on model load by passing them to the widget. Useful when restoring state on app reopen.
+
+```dart
+Interactive3d(
+  modelPath: 'assets/models/Tooth-3.glb',
+  initialMaterialOverrides: [
+    MaterialOverride(name: 'Tooth_3', color: [0.85, 0.15, 0.15, 1.0]),
+    MaterialOverride(name: 'Tooth_7', metallic: 0.9, roughness: 0.2),
+  ],
+)
+```
+
+Successive calls on the same entity merge. Pass only the fields you want to change, the rest keep their value. Selection still wins visually while active, and deselecting restores the override.
+
+Overrides are not persisted by the plugin. Store them in your own state layer (SharedPreferences, Hive, SQLite, or a remote DB) and pass them back via `initialMaterialOverrides` when you build the widget.
 
 ## Must read
 
