@@ -1,15 +1,10 @@
 ## 2.1.0
 
 * 14th release of `interactive_3d`: **Runtime PBR Material Overrides** 🎨
-- New controller API to apply per-entity material changes at runtime: `setEntityMaterial`, `setEntityMaterials`, `resetEntityMaterial`, `resetAllMaterialOverrides`. Change color, metallic, roughness, and emissive on any named entity without going through selection.
-- New widget param `initialMaterialOverrides` applies a list of overrides on model load. Pair with your own state layer to persist styling across app restarts.
-- Sticky partial updates: pass only the fields you want to change, the rest keep their value across successive calls.
-- GLB textures are preserved by default. Color tints the texture instead of replacing it, so surface detail stays visible.
-- Visual priority: selection wins while active, override is the deselect target, GLB original is the fallback.
+- New controller API to change color, metallic, roughness, and emissive on any entity at runtime. GLB textures are preserved, the color tints them.
+- New widget param `initialMaterialOverrides` to apply overrides on model load. Pair it with your own state layer for persistence.
 - Fixed a controller race where rebuilding `Interactive3d` with a new key could leave the controller detached.
-- Backward compatible. Existing `enableCache`, `patchColors`, and `preselectedEntities` paths continue to work.
 - Try it out from the new **PBR Override Testbed** page in the example app.
-- Texture upload from image bytes is tracked separately for v2.2.0.
 
 ## 2.0.4
 
