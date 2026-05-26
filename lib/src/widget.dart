@@ -161,7 +161,7 @@ class Interactive3dState extends State<Interactive3d> {
   void didUpdateWidget(Interactive3d oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
-      oldWidget.controller?.detach();
+      oldWidget.controller?.detach(this);
       widget.controller?.attach(this);
     }
   }
@@ -586,7 +586,7 @@ class Interactive3dState extends State<Interactive3d> {
     _selectionSubscription?.cancel();
     _cacheSelectionSubscription?.cancel();
     _iosEventSubscription?.cancel();
-    widget.controller?.detach();
+    widget.controller?.detach(this);
 
     if (Platform.isIOS) {
       _iosMethodChannel?.invokeMethod('dispose');

@@ -22,14 +22,18 @@ class Interactive3dController {
   Interactive3dState? _state;
 
   /// Attaches to the given [Interactive3dState]. Called automatically
-  /// by the widget — do not call manually.
+  /// by the widget, do not call manually.
   void attach(Interactive3dState state) {
     _state = state;
   }
 
-  /// Detaches from the state. Called automatically on dispose.
-  void detach() {
-    _state = null;
+  /// Detaches if currently attached to [state], or unconditionally if [state]
+  /// is null. The identity check guards against an old state's dispose
+  /// stomping a new state's attach when the widget rebuilds with a new key.
+  void detach([Interactive3dState? state]) {
+    if (state == null || identical(_state, state)) {
+      _state = null;
+    }
   }
 
   void _ensureAttached() {
