@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:interactive_3d/interactive_3d.dart';
 
-/// End-to-end testbed for runtime PBR overrides (v2.1.0).
-/// Walk through every action button in order to verify the 9 scenarios.
+/// End-to-end testbed for runtime PBR overrides.
+/// Stays on the clean path: no cache, no patchColors, no preselectedEntities.
+/// The plugin renders. Your app owns the state and persistence.
 class PbrOverrideTestbed extends StatefulWidget {
   const PbrOverrideTestbed({super.key});
 
@@ -17,10 +18,8 @@ class _PbrOverrideTestbedState extends State<PbrOverrideTestbed> {
   final Map<String, MaterialOverride> _overrides = {};
   String? _selectedName;
 
-  // Mode flags drive widget rebuilds via _modelKey.
+  // Mode flag drives widget rebuilds via _modelKey.
   bool _useInitialOverrides = false;
-  bool _enableCache = false;
-  bool _enableSequence = false;
   int _modelKey = 0;
 
   String _lastAction = 'Tap a tooth to begin.';
@@ -128,15 +127,11 @@ class _PbrOverrideTestbedState extends State<PbrOverrideTestbed> {
 
   void _reload({
     bool withInitialOverrides = false,
-    bool enableCache = false,
-    bool enableSequence = false,
     required String label,
     required String expectation,
   }) {
     setState(() {
       _useInitialOverrides = withInitialOverrides;
-      _enableCache = enableCache;
-      _enableSequence = enableSequence;
       _modelKey++;
       _selectedName = null;
       if (!withInitialOverrides) _overrides.clear();
@@ -154,6 +149,43 @@ class _PbrOverrideTestbedState extends State<PbrOverrideTestbed> {
     });
   }
 
+  void _showPersistenceGuide(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Persisting overrides app-side'),
+        content: const SingleChildScrollView(
+          child: Text(
+            'The plugin does not persist overrides. Your app owns the state '
+            'and survives across restarts.\n\n'
+            '1. Store overrides in your own layer (SharedPreferences, Hive, '
+            'SQLite, or a remote DB). A simple Map<String, MaterialOverride> '
+            'or a list of MaterialOverride works.\n\n'
+            '2. On any runtime change, mirror it to storage:\n'
+            '   controller.setEntityMaterial(name: ..., color: ...);\n'
+            '   await repo.save(currentOverrides);\n\n'
+            '3. On widget construction, read from storage and pass via\n'
+            '   initialMaterialOverrides:\n'
+            '   final saved = await repo.load();\n'
+            '   Interactive3d(\n'
+            '     initialMaterialOverrides: saved,\n'
+            '     ...\n'
+            '   );\n\n'
+            'Keep enableCache false. Do not use patchColors or '
+            'preselectedEntities for styling, those are legacy paths kept '
+            'for backward compatibility.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+
   MaterialOverride _merge(MaterialOverride? existing, MaterialOverride update) {
     return MaterialOverride(
       name: update.name,
@@ -164,26 +196,7 @@ class _PbrOverrideTestbedState extends State<PbrOverrideTestbed> {
     );
   }
 
-  String get _mode {
-    if (_enableSequence) return 'sequence';
-    if (_enableCache) return 'cache';
-    if (_useInitialOverrides) return 'initialOverrides';
-    return 'clean';
-  }
-
-  List<SequenceConfig> _sequenceConfig() => [
-        SequenceConfig(
-          group: 'lower',
-          order: const [
-            'Teeth_Lower_1',
-            'Teeth_Lower_2',
-            'Teeth_Lower_3',
-            'Teeth_Lower_4',
-            'Teeth_Lower_5',
-          ],
-          bidirectional: true,
-        ),
-      ];
+  String get _mode => _useInitialOverrides ? 'initialOverrides' : 'clean';
 
   // -- Build --------------------------------------------------------------
 
@@ -194,6 +207,13 @@ class _PbrOverrideTestbedState extends State<PbrOverrideTestbed> {
         title: const Text('PBR Override Testbed'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            tooltip: 'How to persist overrides',
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => _showPersistenceGuide(context),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -223,9 +243,6 @@ class _PbrOverrideTestbedState extends State<PbrOverrideTestbed> {
       iOSBackgroundEnvPath: 'assets/models/san_giuseppe_bridge_4k.hdr',
       selectionColor: const [0.0, 0.6, 1.0, 1.0],
       onSelectionChanged: _onSelectionChanged,
-      enableCache: _enableCache,
-      cacheColor: _enableCache ? const [0.9, 0.7, 0.1, 0.6] : null,
-      selectionSequence: _enableSequence ? _sequenceConfig() : null,
       initialMaterialOverrides:
           _useInitialOverrides ? _overrides.values.toList() : null,
     );
@@ -331,20 +348,6 @@ class _PbrOverrideTestbedState extends State<PbrOverrideTestbed> {
                     'Previously overridden teeth should appear pre-painted. Tap and deselect to confirm override is the deselect target.',
               );
             }),
-            _Action('+Cache', Colors.teal.shade700,
-                () => _reload(
-                      enableCache: true,
-                      label: 'Reloaded with cache ON.',
-                      expectation:
-                          'Now tap a tooth (gets cached). Then apply an override on it. Override should win visually; cache stays in storage.',
-                    )),
-            _Action('+Sequence', Colors.teal.shade800,
-                () => _reload(
-                      enableSequence: true,
-                      label: 'Reloaded with selection sequence ON.',
-                      expectation:
-                          'Sequence: Teeth_Lower_1 to 5, bidirectional. Try tapping Teeth_Lower_3 first. It should be rejected. Apply overrides to test sequence works through textured entities.',
-                    )),
           ],
         ),
         _ActionSection(
