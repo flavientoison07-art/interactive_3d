@@ -1,7 +1,15 @@
+## 2.1.0
+
+* 14th release of `interactive_3d`: **Runtime PBR Material Overrides** 🎨
+- New controller API to change color, metallic, roughness, and emissive on any entity at runtime. GLB textures are preserved, the color tints them.
+- New widget param `initialMaterialOverrides` to apply overrides on model load. Pair it with your own state layer for persistence.
+- Fixed a controller race where rebuilding `Interactive3d` with a new key could leave the controller detached.
+- Try it out from the new **PBR Override Testbed** page in the example app.
+
 ## 2.0.4
 
 * 13th release of `interactive_3d`
-- Added `selectionSequence` enforcement on Android, matching the existing iOS behavior — taps that violate the configured order are rejected and emit a `selectionRejected` event.
+- Added `selectionSequence` enforcement on Android, matching the existing iOS behavior. Taps that violate the configured order are rejected and emit a `selectionRejected` event.
 
 
 ## 2.0.3

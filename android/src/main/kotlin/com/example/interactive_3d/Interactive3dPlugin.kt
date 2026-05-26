@@ -65,6 +65,8 @@ class Interactive3dPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
       "clearCache" -> handleClearCache(call, result)
       "refreshCacheHighlights" -> handleRefreshCacheHighlights(call, result)
       "removeFromCache" -> handleRemoveFromCache(call, result)
+      "setEntityMaterials" -> handleSetEntityMaterials(call, result)
+      "resetEntityMaterials" -> handleResetEntityMaterials(call, result)
       "onTouchEvent" -> handleTouchEvent(call, result)
       else -> result.notImplemented()
     }
@@ -136,7 +138,8 @@ class Interactive3dPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         enableCache = call.argument<Boolean>("enableCache") ?: false,
         cacheColor = call.argument("cacheColor"),
         clearSelectionsOnHighlight = call.argument<Boolean>("clearSelectionsOnHighlight") ?: false,
-        selectionSequence = call.argument("selectionSequence")
+        selectionSequence = call.argument("selectionSequence"),
+        initialMaterialOverrides = call.argument("initialMaterialOverrides")
       )
       result.success(null)
     } catch (e: Exception) {
@@ -256,6 +259,31 @@ class Interactive3dPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
       ?: return result.error("TEXTURE_NOT_FOUND", "Texture $textureId not found", null)
 
     entry.removeFromCache(names)
+    result.success(null)
+  }
+
+  private fun handleSetEntityMaterials(call: MethodCall, result: MethodChannel.Result) {
+    val textureId = call.argument<Number>("textureId")?.toLong()
+    val overrides = call.argument<List<Map<String, Any>>>("overrides")
+
+    if (textureId == null || overrides == null)
+      return result.error("INVALID_ARGUMENT", "textureId and overrides required", null)
+
+    val entry = textureEntries[textureId]
+      ?: return result.error("TEXTURE_NOT_FOUND", "Texture $textureId not found", null)
+
+    entry.setEntityMaterials(overrides)
+    result.success(null)
+  }
+
+  private fun handleResetEntityMaterials(call: MethodCall, result: MethodChannel.Result) {
+    val textureId = call.argument<Number>("textureId")?.toLong()
+      ?: return result.error("INVALID_ARGUMENT", "textureId required", null)
+
+    val entry = textureEntries[textureId]
+      ?: return result.error("TEXTURE_NOT_FOUND", "Texture $textureId not found", null)
+
+    entry.resetEntityMaterials(call.argument("names"))
     result.success(null)
   }
 

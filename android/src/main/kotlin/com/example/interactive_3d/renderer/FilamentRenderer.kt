@@ -250,7 +250,8 @@ class FilamentRenderer(
         enableCache: Boolean,
         cacheColor: List<Double>?,
         clearSelectionsOnHighlight: Boolean = false,
-        selectionSequence: List<Map<String, Any>>? = null
+        selectionSequence: List<Map<String, Any>>? = null,
+        initialMaterialOverrides: List<Map<String, Any>>? = null
     ) {
         val eng = engine ?: return
         val scn = scene ?: return
@@ -293,12 +294,31 @@ class FilamentRenderer(
             }
         }
 
+        // Apply overrides first so they sit underneath any selection that follows.
+        if (!initialMaterialOverrides.isNullOrEmpty()) {
+            selection.applyOverridesByName(initialMaterialOverrides, asset, eng)
+        }
+
         // Apply preselections and cache highlights
         selection.applyPreselections(preselectedEntities, asset, eng)
         if (enableCache) {
             selection.highlightCachedEntities(asset, eng)
             selection.notifyCacheChanged()
         }
+    }
+
+    fun setEntityMaterials(overrides: List<Map<String, Any>>) {
+        val eng = engine ?: return
+        val asset = modelLoader.currentAsset ?: return
+        selection.applyOverridesByName(overrides, asset, eng)
+        requestRender()
+    }
+
+    fun resetEntityMaterials(names: List<String>?) {
+        val eng = engine ?: return
+        val asset = modelLoader.currentAsset ?: return
+        selection.resetOverridesByName(names, asset, eng)
+        requestRender()
     }
 
     // -------------------------------------------------------------------------

@@ -22,14 +22,18 @@ class Interactive3dController {
   Interactive3dState? _state;
 
   /// Attaches to the given [Interactive3dState]. Called automatically
-  /// by the widget — do not call manually.
+  /// by the widget, do not call manually.
   void attach(Interactive3dState state) {
     _state = state;
   }
 
-  /// Detaches from the state. Called automatically on dispose.
-  void detach() {
-    _state = null;
+  /// Detaches if currently attached to [state], or unconditionally if [state]
+  /// is null. The identity check guards against an old state's dispose
+  /// stomping a new state's attach when the widget rebuilds with a new key.
+  void detach([Interactive3dState? state]) {
+    if (state == null || identical(_state, state)) {
+      _state = null;
+    }
   }
 
   void _ensureAttached() {
@@ -80,5 +84,44 @@ class Interactive3dController {
   Future<void> removeFromCache(List<String> names) async {
     _ensureAttached();
     await _state!.removeFromCache(names);
+  }
+
+  /// Applies a persistent PBR override to a single entity.
+  /// Null fields keep their prior value; pass any combination of fields.
+  Future<void> setEntityMaterial({
+    required String name,
+    List<double>? color,
+    double? metallic,
+    double? roughness,
+    List<double>? emissive,
+  }) async {
+    _ensureAttached();
+    await _state!.setEntityMaterials([
+      MaterialOverride(
+        name: name,
+        color: color,
+        metallic: metallic,
+        roughness: roughness,
+        emissive: emissive,
+      ),
+    ]);
+  }
+
+  /// Applies persistent PBR overrides to many entities in one call.
+  Future<void> setEntityMaterials(List<MaterialOverride> overrides) async {
+    _ensureAttached();
+    await _state!.setEntityMaterials(overrides);
+  }
+
+  /// Removes the override on [name], restoring the GLB original.
+  Future<void> resetEntityMaterial(String name) async {
+    _ensureAttached();
+    await _state!.resetEntityMaterials([name]);
+  }
+
+  /// Removes all active overrides, restoring every overridden entity.
+  Future<void> resetAllMaterialOverrides() async {
+    _ensureAttached();
+    await _state!.resetEntityMaterials(null);
   }
 }

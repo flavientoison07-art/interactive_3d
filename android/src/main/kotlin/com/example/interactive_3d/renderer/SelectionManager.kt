@@ -44,6 +44,14 @@ internal class SelectionManager {
     var cacheColor = floatArrayOf(0.8f, 0.8f, 0.2f, 0.6f)
     var clearSelectionsOnHighlight = false
 
+    // PBR override state, independent of selection and cache.
+    // overrideParams accumulates merged params per entity across calls.
+    // overrideMaterials holds the live MaterialInstances applied to the renderable.
+    // entitiesWithOverrideApplied tracks which entities currently render the override.
+    private val overrideParams = mutableMapOf<Int, MutableMap<String, Any>>()
+    private val overrideMaterials = mutableMapOf<Int, MutableMap<Int, MaterialInstance>>()
+    private val entitiesWithOverrideApplied = mutableSetOf<Int>()
+
     // Part visibility tracking
     val entityVisibilities = mutableMapOf<Int, Boolean>()
 
@@ -131,6 +139,8 @@ internal class SelectionManager {
             }
         }
         entitiesWithSelectionColor.add(entity)
+        // Selection takes over visually; override is no longer rendered.
+        entitiesWithOverrideApplied.remove(entity)
     }
 
     /**
@@ -183,6 +193,150 @@ internal class SelectionManager {
     }
 
     /**
+     * Merges [params] into the entity's override and applies the override
+     * material if the entity is not currently selected. Override visually
+     * wins over cache; cache remains in storage.
+     */
+    fun applyMaterialOverride(entity: Int, params: Map<String, Any>, engine: Engine) {
+        val rcm = engine.renderableManager
+        if (!rcm.hasComponent(entity)) return
+        val ri = rcm.getInstance(entity)
+        val count = rcm.getPrimitiveCount(ri)
+
+        // Snapshot GLB original on first modification of this entity.
+        if (!originalMaterials.containsKey(entity)) {
+            val backup = mutableMapOf<Int, MaterialInstance>()
+            for (i in 0 until count) {
+                try { backup[i] = rcm.getMaterialInstanceAt(ri, i) }
+                catch (e: Exception) { Log.w(TAG, "Could not backup material: ${e.message}") }
+            }
+            originalMaterials[entity] = backup
+        }
+
+        // Merge new params into the accumulated override state.
+        val merged = overrideParams.getOrPut(entity) { mutableMapOf() }
+        for ((k, v) in params) merged[k] = v
+
+        // Build override MaterialInstances on first use, reuse afterwards.
+        val mats = overrideMaterials.getOrPut(entity) {
+            val newMap = mutableMapOf<Int, MaterialInstance>()
+            for (i in 0 until count) {
+                try {
+                    val orig = originalMaterials[entity]?.get(i) ?: continue
+                    newMap[i] = orig.material.createInstance()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not create override instance: ${e.message}")
+                }
+            }
+            newMap
+        }
+
+        // Apply every accumulated param to each override instance.
+        for ((_, mat) in mats) applyOverrideParamsToInstance(mat, merged)
+
+        // Selection wins visually; only stash the deselect target.
+        if (entity in entitiesWithSelectionColor) return
+
+        for ((idx, mat) in mats) {
+            try { rcm.setMaterialInstanceAt(ri, idx, mat) }
+            catch (e: Exception) { Log.w(TAG, "Could not apply override: ${e.message}") }
+        }
+        entitiesWithOverrideApplied.add(entity)
+        entitiesWithCacheColor.remove(entity)
+    }
+
+    /** Removes the override on [entity] and restores GLB original if visible. */
+    fun resetMaterialOverride(entity: Int, engine: Engine) {
+        // Destroy override instances first so they cannot be reused.
+        overrideMaterials.remove(entity)?.values?.forEach { mat ->
+            try { engine.destroyMaterialInstance(mat) }
+            catch (e: Exception) { Log.w(TAG, "Failed to destroy override instance: ${e.message}") }
+        }
+        overrideParams.remove(entity)
+
+        if (entity !in entitiesWithOverrideApplied) return
+        entitiesWithOverrideApplied.remove(entity)
+
+        val rcm = engine.renderableManager
+        if (!rcm.hasComponent(entity)) return
+        val ri = rcm.getInstance(entity)
+
+        originalMaterials[entity]?.forEach { (idx, mat) ->
+            try { rcm.setMaterialInstanceAt(ri, idx, mat) }
+            catch (e: Exception) { Log.w(TAG, "Could not restore on override reset: ${e.message}") }
+        }
+
+        if (entity !in entitiesWithSelectionColor && entity !in entitiesWithCacheColor) {
+            originalMaterials.remove(entity)
+        }
+    }
+
+    /** Removes every active override. */
+    fun resetAllMaterialOverrides(engine: Engine) {
+        for (entity in overrideParams.keys.toList()) {
+            resetMaterialOverride(entity, engine)
+        }
+    }
+
+    /**
+     * Looks up entities by name and applies overrides. Used both on model load
+     * (initialMaterialOverrides) and from the controller (setEntityMaterials).
+     */
+    fun applyOverridesByName(
+        overrides: List<Map<String, Any>>,
+        asset: FilamentAsset,
+        engine: Engine,
+    ) {
+        if (overrides.isEmpty()) return
+        for (entry in overrides) {
+            val name = entry["name"] as? String ?: continue
+            val params = entry.filterKeys { it != "name" }
+            asset.entities?.forEach { entity ->
+                if (asset.getName(entity) == name) {
+                    applyMaterialOverride(entity, params, engine)
+                }
+            }
+        }
+    }
+
+    /** Resets overrides for entities matched by [names], or all when null. */
+    fun resetOverridesByName(
+        names: List<String>?,
+        asset: FilamentAsset,
+        engine: Engine,
+    ) {
+        if (names == null) {
+            resetAllMaterialOverrides(engine)
+            return
+        }
+        for (name in names) {
+            asset.entities?.forEach { entity ->
+                if (asset.getName(entity) == name) {
+                    resetMaterialOverride(entity, engine)
+                }
+            }
+        }
+    }
+
+    private fun applyOverrideParamsToInstance(mat: MaterialInstance, params: Map<String, Any>) {
+        (params["color"] as? List<Double>)?.takeIf { it.size == 4 }?.let { c ->
+            // baseColorFactor multiplies baseColorMap, preserving GLB textures.
+            mat.setParameter(
+                "baseColorFactor",
+                c[0].toFloat(), c[1].toFloat(), c[2].toFloat(), c[3].toFloat()
+            )
+        }
+        (params["metallic"] as? Double)?.let { mat.setParameter("metallicFactor", it.toFloat()) }
+        (params["roughness"] as? Double)?.let { mat.setParameter("roughnessFactor", it.toFloat()) }
+        (params["emissive"] as? List<Double>)?.takeIf { it.size == 3 }?.let { e ->
+            mat.setParameter(
+                "emissiveFactor",
+                e[0].toFloat(), e[1].toFloat(), e[2].toFloat()
+            )
+        }
+    }
+
+    /**
      * Restores original materials on [entity], removing any selection or
      * cache highlight.
      */
@@ -192,18 +346,22 @@ internal class SelectionManager {
         val ri = rcm.getInstance(entity)
 
         if (entitiesWithSelectionColor.contains(entity) || entitiesWithCacheColor.contains(entity)) {
-            // Entity had a new MaterialInstance (selection or cache) — restore originals
-            val originals = originalMaterials[entity]
-            if (originals != null) {
-                for ((idx, mat) in originals) {
+            // Restore to override material if one exists, otherwise GLB original.
+            val restoreTo = overrideMaterials[entity] ?: originalMaterials[entity]
+            if (restoreTo != null) {
+                for ((idx, mat) in restoreTo) {
                     try { rcm.setMaterialInstanceAt(ri, idx, mat) }
                     catch (e: Exception) { Log.w(TAG, "Could not restore material: ${e.message}") }
                 }
             }
             entitiesWithSelectionColor.remove(entity)
             entitiesWithCacheColor.remove(entity)
+
+            if (overrideMaterials.containsKey(entity)) {
+                entitiesWithOverrideApplied.add(entity)
+            }
         } else {
-            // No backup exists — reset to default PBR values
+            // No backup exists — reset to default PBR values.
             val count = rcm.getPrimitiveCount(ri)
             val emissiveValue = if (iblLoaded) 0.0f else 0.2f
             for (i in 0 until count) {
@@ -219,17 +377,24 @@ internal class SelectionManager {
             }
         }
 
-        originalMaterials.remove(entity)
+        // Preserve the GLB-original snapshot if an override is still registered.
+        if (entity !in entitiesWithOverrideApplied) {
+            originalMaterials.remove(entity)
+        }
     }
 
     /**
-     * Highlights all entities that are in the persistent cache.
+     * Highlights all cached entities. Skips overridden entities so the
+     * override remains visible.
      */
     fun highlightCachedEntities(asset: FilamentAsset, engine: Engine) {
         if (!enableCache || cacheManager == null) return
         cacheManager?.cachedEntities?.forEach { cachedName ->
             asset.entities?.forEach { entity ->
-                if (asset.getName(entity) == cachedName && entity !in selectedEntities) {
+                if (asset.getName(entity) == cachedName &&
+                    entity !in selectedEntities &&
+                    entity !in entitiesWithOverrideApplied
+                ) {
                     applyCacheColor(entity, engine)
                 }
             }
@@ -237,33 +402,36 @@ internal class SelectionManager {
     }
 
     /**
-     * Full refresh: reset everything, then re-apply cache and selection colors.
-     * Matches iOS refreshCacheHighlights behavior exactly.
+     * Resets everything and re-applies in priority order:
+     * selection > override > cache > GLB original.
      */
     fun refreshAllHighlights(asset: FilamentAsset, engine: Engine, clearSelections: Boolean) {
-        // 1. Reset ALL entities to original materials
+        // 1. Reset entities that had selection or cache visuals. resetColor
+        //    internally restores to override material when one is registered.
         asset.entities?.forEach { entity ->
-            if (originalMaterials.containsKey(entity) ||
-                entitiesWithSelectionColor.contains(entity) ||
+            if (entitiesWithSelectionColor.contains(entity) ||
                 entitiesWithCacheColor.contains(entity)) {
                 resetColor(entity, engine)
             }
         }
 
-        // 2. Apply cache color (takes priority in appearance)
+        // 2. Apply cache color, skipping any entity with an override.
         val cachedSet = mutableSetOf<String>()
         if (enableCache && cacheManager != null) {
             cacheManager?.cachedEntities?.forEach { cachedName ->
                 cachedSet.add(cachedName)
                 asset.entities?.forEach { entity ->
-                    if (asset.getName(entity) == cachedName) {
+                    if (asset.getName(entity) == cachedName &&
+                        entity !in entitiesWithOverrideApplied &&
+                        !overrideParams.containsKey(entity)
+                    ) {
                         applyCacheColor(entity, engine)
                     }
                 }
             }
         }
 
-        // 3. Re-apply selection color ONLY to entities NOT in cache
+        // 3. Selection on top regardless of cache or override.
         for (entity in selectedEntities.toSet()) {
             val name = asset.getName(entity)
             if (name != null && !cachedSet.contains(name)) {
@@ -272,7 +440,6 @@ internal class SelectionManager {
             }
         }
 
-        // 4. Clear selections if configured
         if (clearSelections) {
             selectedEntities.clear()
         }
@@ -385,15 +552,28 @@ internal class SelectionManager {
     }
 
     /**
-     * Resets all selection state. Call before loading a new model.
+     * Resets all selection and override state. Call before loading a new model.
      */
     fun reset(engine: Engine) {
         selectedEntities.clear()
         entityVisibilities.clear()
         destroyCreatedInstances(engine)
+        destroyOverrideInstances(engine)
         originalMaterials.clear()
         entitiesWithSelectionColor.clear()
         entitiesWithCacheColor.clear()
+        entitiesWithOverrideApplied.clear()
+        overrideParams.clear()
+    }
+
+    private fun destroyOverrideInstances(engine: Engine) {
+        overrideMaterials.values.forEach { primitives ->
+            primitives.values.forEach { mat ->
+                try { engine.destroyMaterialInstance(mat) }
+                catch (e: Exception) { Log.w(TAG, "Failed to destroy override instance: ${e.message}") }
+            }
+        }
+        overrideMaterials.clear()
     }
 
     /**

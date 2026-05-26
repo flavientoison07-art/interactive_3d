@@ -18,6 +18,10 @@ class SelectionHandler {
     var cacheManager: Interactive3DCacheManager?
     var cacheColor: UIColor = UIColor(red: 0.8, green: 0.8, blue: 0.2, alpha: 0.6)
 
+    /// Accumulated PBR override params per geometry node. Merged across calls;
+    /// cleared by resetMaterialOverride.
+    var overrideParams: [SCNNode: [String: Any]] = [:]
+
     /// Finds the first descendant (or self) that has geometry attached.
     func findGeometryNode(in node: SCNNode) -> SCNNode? {
         if node.geometry != nil { return node }
@@ -80,14 +84,94 @@ class SelectionHandler {
         material.multiply.contents = cacheColor
     }
 
-    /// Restores the original material on a geometry node.
-    /// Uses a copy to break pointer sharing, then removes the backup.
+    /// Restores [node] to the override material if one exists, otherwise to the
+    /// GLB original. Drops [originalMaterials] only when no override remains.
     func resetNodeColor(_ node: SCNNode) {
         guard let geometry = node.geometry else { return }
-        if let originalMaterial = originalMaterials[node] {
-            geometry.materials = [originalMaterial.copy() as! SCNMaterial]
+        guard let original = originalMaterials[node] else { return }
+
+        let restoreTo: SCNMaterial = computeOverrideMaterial(for: node) ?? (original.copy() as! SCNMaterial)
+        geometry.materials = [restoreTo]
+
+        if overrideParams[node] == nil {
             originalMaterials.removeValue(forKey: node)
         }
+    }
+
+    /// Merges [params] into this node's accumulated override and applies
+    /// the result if the node is not currently selected.
+    func applyMaterialOverride(to node: SCNNode, params: [String: Any]) {
+        guard let geometry = node.geometry, let material = geometry.firstMaterial else { return }
+        if originalMaterials[node] == nil {
+            originalMaterials[node] = material.copy() as? SCNMaterial
+        }
+
+        var merged = overrideParams[node] ?? [:]
+        for (k, v) in params { merged[k] = v }
+        overrideParams[node] = merged
+
+        // Selection takes precedence visually; we just stored the deselect target.
+        let parent = findNamedParent(of: node)
+        if let p = parent, selectedNodes.contains(p) { return }
+
+        if let overrideMat = computeOverrideMaterial(for: node) {
+            geometry.materials = [overrideMat]
+        }
+    }
+
+    /// Removes the override on [node] and restores the GLB original if visible.
+    func resetMaterialOverride(_ node: SCNNode) {
+        overrideParams.removeValue(forKey: node)
+        guard let geometry = node.geometry, let original = originalMaterials[node] else { return }
+
+        let parent = findNamedParent(of: node)
+        if let p = parent, selectedNodes.contains(p) { return }
+
+        geometry.materials = [original.copy() as! SCNMaterial]
+        originalMaterials.removeValue(forKey: node)
+    }
+
+    /// Builds the override material for [node] from a fresh copy of its original,
+    /// applying every accumulated param. Returns nil if no override is registered.
+    private func computeOverrideMaterial(for node: SCNNode) -> SCNMaterial? {
+        guard let params = overrideParams[node], let original = originalMaterials[node] else { return nil }
+        let m = original.copy() as! SCNMaterial
+
+        if let c = params["color"] as? [Double], c.count == 4 {
+            m.multiply.contents = UIColor(
+                red: CGFloat(c[0]), green: CGFloat(c[1]),
+                blue: CGFloat(c[2]), alpha: CGFloat(c[3])
+            )
+        }
+        if let metallic = params["metallic"] as? Double {
+            m.metalness.contents = NSNumber(value: metallic)
+        }
+        if let roughness = params["roughness"] as? Double {
+            m.roughness.contents = NSNumber(value: roughness)
+        }
+        if let e = params["emissive"] as? [Double], e.count == 3 {
+            m.emission.contents = UIColor(
+                red: CGFloat(e[0]), green: CGFloat(e[1]),
+                blue: CGFloat(e[2]), alpha: 1.0
+            )
+        }
+        return m
+    }
+
+    /// Walks up from a geometry node to find the named parent that
+    /// selectedNodes tracks.
+    private func findNamedParent(of node: SCNNode) -> SCNNode? {
+        var n: SCNNode? = node
+        while n != nil {
+            if let name = n!.name,
+               !name.isEmpty,
+               !name.starts(with: "Mesh."),
+               !name.hasSuffix(".001") {
+                return n
+            }
+            n = n?.parent
+        }
+        return nil
     }
 
     /// Unselects entities by hash ID, or all if [entityIds] is nil.
@@ -111,48 +195,51 @@ class SelectionHandler {
     }
 
     /// Highlights all entities that are in the persistent cache.
+    /// Overridden entities are skipped; override wins visually over cache.
     func highlightCachedEntities(in scene: SCNScene) {
         guard enableCache, let cacheMgr = cacheManager else { return }
         for cachedName in cacheMgr.cachedEntities {
             scene.rootNode.enumerateChildNodes { (node, _) in
                 if let nodeName = node.name, nodeName == cachedName,
-                   let geometryNode = self.findGeometryNode(in: node) {
+                   let geometryNode = self.findGeometryNode(in: node),
+                   self.overrideParams[geometryNode] == nil {
                     self.applyCacheHighlight(to: geometryNode)
                 }
             }
         }
     }
 
-    /// Refreshes all highlights: resets everything, then re-applies cache
-    /// and selection colors in the correct priority order.
+    /// Resets everything, then re-applies cache and selection in priority order.
+    /// Priority on refresh: selection > override > cache > GLB original.
     func refreshAllHighlights(in scene: SCNScene) {
-        // 1. Reset all nodes
+        // 1. Reset all nodes. resetNodeColor restores override-or-original.
         scene.rootNode.enumerateChildNodes { (node, _) in
             if let geometryNode = self.findGeometryNode(in: node) {
                 self.resetNodeColor(geometryNode)
             }
         }
-        // 2. Cache highlights (takes priority)
+        // 2. Cache highlights, skipping any entity that has an override.
         var cachedSet = Set<String>()
         if enableCache, let cacheMgr = cacheManager {
             for cachedName in cacheMgr.cachedEntities {
                 cachedSet.insert(cachedName)
                 scene.rootNode.enumerateChildNodes { (node, _) in
                     if let nodeName = node.name, nodeName == cachedName,
-                       let geometryNode = self.findGeometryNode(in: node) {
+                       let geometryNode = self.findGeometryNode(in: node),
+                       self.overrideParams[geometryNode] == nil {
                         self.applyCacheHighlight(to: geometryNode)
                     }
                 }
             }
         }
-        // 3. Selection highlights (only for non-cached nodes)
+        // 3. Selection on top (regardless of cache or override status).
         for node in selectedNodes {
             if let name = node.name, !cachedSet.contains(name),
                let geometryNode = findGeometryNode(in: node) {
                 applyHighlight(to: geometryNode, forNodeName: name)
             }
         }
-        // 4. Clear selections if configured
+        // 4. Clear selections if configured.
         if clearSelectionsOnHighlight {
             selectedNodes.removeAll()
         }
@@ -201,10 +288,11 @@ class SelectionHandler {
         }
     }
 
-    /// Resets all selection state. Call before loading a new model.
+    /// Resets all selection and override state. Call before loading a new model.
     func reset() {
         selectedNodes.removeAll()
         originalMaterials.removeAll()
+        overrideParams.removeAll()
     }
 
     /// Full cleanup — releases all references.
