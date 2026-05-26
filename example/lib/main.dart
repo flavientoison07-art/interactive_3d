@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:interactive_3d_example/glb_loader_example.dart';
 import 'package:interactive_3d_example/memory_test_page.dart';
-import 'package:interactive_3d_example/pbr_override_example.dart';
+import 'package:interactive_3d_example/pbr_override_testbed.dart';
 
 
 void main() {
@@ -101,17 +101,17 @@ class HomePage extends StatelessWidget {
             ),
             const SizedBox(height: 12),
 
-            // PBR Override Example Button
+            // PBR Override Testbed Button
             _ExampleButton(
-              icon: Icons.palette,
-              title: 'PBR Material Overrides',
-              description: 'Apply per-entity color and PBR tweaks at runtime',
+              icon: Icons.science,
+              title: 'PBR Override Testbed',
+              description: 'End-to-end test page for runtime PBR overrides',
               color: Colors.teal,
               onTap: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const PbrOverrideExample(),
+                    builder: (context) => const PbrOverrideTestbed(),
                   ),
                 );
               },
