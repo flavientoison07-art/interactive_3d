@@ -1,3 +1,10 @@
+## 2.1.1
+
+* 15th release of `interactive_3d`: **Flutter 3.44 Compatibility** 🛠️
+- Added Swift Package Manager support alongside the existing CocoaPods podspec. iOS sources moved to `ios/interactive_3d/Sources/interactive_3d/`.
+- Removed manual Kotlin Gradle Plugin classpath. Android Gradle Plugin 9.0 bundles Kotlin automatically.
+- Minimum Flutter version bumped to `3.44.0`. Stay on `2.1.0` if you are on an older Flutter SDK.
+
 ## 2.1.0
 
 * 14th release of `interactive_3d`: **Runtime PBR Material Overrides** 🎨
