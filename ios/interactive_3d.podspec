@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'interactive_3d'
-  s.version          = '1.2.0'
+  s.version          = '2.1.1'
   s.summary          = 'A plugin to render interactive 3D model in .gLTF or .glb using Filament Engine'
   s.description      = <<-DESC
 A plugin to render interactive 3D model in .gLTF or .glb
@@ -13,7 +13,7 @@ A plugin to render interactive 3D model in .gLTF or .glb
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'Muhammad Adnan' => 'ak187429@gmail.com' }
   s.source           = { :path => '.' }
-  s.source_files = 'Classes/**/*'
+  s.source_files = 'interactive_3d/Sources/interactive_3d/**/*'
   s.dependency 'Flutter'
   s.dependency 'GLTFSceneKit', '~> 0.3.0'
   s.platform = :ios, '12.0'

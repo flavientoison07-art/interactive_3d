@@ -1,3 +1,10 @@
+## 2.1.1
+
+* 15th release of `interactive_3d`: **Flutter 3.44 Compatibility** 🛠️
+- Added Swift Package Manager support alongside the existing CocoaPods podspec. iOS sources moved to `ios/interactive_3d/Sources/interactive_3d/`.
+- Migrated Android to Built-in Kotlin. Removed `apply plugin: "kotlin-android"`, the manual KGP classpath, and the legacy `kotlinOptions` block; replaced with a top-level `kotlin { compilerOptions { } }` block. Future Flutter releases reject plugins that apply KGP manually.
+- Minimum Flutter version bumped to `3.44.0`. Stay on `2.1.0` if you are on an older Flutter SDK.
+
 ## 2.1.0
 
 * 14th release of `interactive_3d`: **Runtime PBR Material Overrides** 🎨
