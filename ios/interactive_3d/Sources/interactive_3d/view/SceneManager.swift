@@ -84,9 +84,19 @@ class SceneManager {
             if let geometry = node.geometry {
                 if geometry.materials.isEmpty || geometry.firstMaterial?.diffuse.contents == nil {
                     let fallback = SCNMaterial()
-                    fallback.diffuse.contents = UIColor.green
+                    // NeoSelf: .blinn réagit aux lumières directionnelles →
+                    // donne du relief/ombrage. Un GLB sans matériaux rendu en
+                    // PBR (.physicallyBased) sans environnement IBL paraît plat.
+                    fallback.lightingModel = .blinn
+                    fallback.diffuse.contents = UIColor(white: 0.85, alpha: 1.0)
                     fallback.isDoubleSided = true
                     geometry.materials = [fallback]
+                } else {
+                    // NeoSelf: force un lighting model éclairé pour les matériaux
+                    // existants aussi (sinon le PBR sans IBL reste plat/blanc).
+                    for material in geometry.materials {
+                        material.lightingModel = .blinn
+                    }
                 }
             }
         }
@@ -181,21 +191,35 @@ class SceneManager {
     }
 
     private func addDefaultLighting(to scene: SCNScene) {
+        // NeoSelf: ambiante RÉDUITE (1000 → 300). Une ambiante trop forte
+        // éclaire toutes les faces également et écrase le relief. On laisse
+        // la/les lumière(s) directionnelle(s) créer l'ombrage.
         let ambient = SCNNode()
         ambient.light = SCNLight()
         ambient.light!.type = .ambient
         ambient.light!.color = UIColor.white
-        ambient.light!.intensity = 1000
+        ambient.light!.intensity = 300
         scene.rootNode.addChildNode(ambient)
 
+        // Lumière directionnelle principale (face avant, légèrement en haut).
         let directional = SCNNode()
         directional.light = SCNLight()
         directional.light!.type = .directional
         directional.light!.color = UIColor.white
-        directional.light!.intensity = 2000
-        directional.position = SCNVector3(x: 10, y: 10, z: 10)
+        directional.light!.intensity = 1000
+        directional.position = SCNVector3(x: 5, y: 8, z: 10)
         directional.look(at: SCNVector3Zero)
         scene.rootNode.addChildNode(directional)
+
+        // Lumière d'appoint opposée (fill) pour déboucher les ombres trop dures.
+        let fill = SCNNode()
+        fill.light = SCNLight()
+        fill.light!.type = .directional
+        fill.light!.color = UIColor.white
+        fill.light!.intensity = 500
+        fill.position = SCNVector3(x: -8, y: 2, z: -6)
+        fill.look(at: SCNVector3Zero)
+        scene.rootNode.addChildNode(fill)
     }
 
     private func addHdrLighting(to scene: SCNScene) {
