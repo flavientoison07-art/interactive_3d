@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show Factory;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -99,6 +101,14 @@ class Interactive3d extends StatefulWidget {
   /// visually; deselect restores the override.
   final List<MaterialOverride>? initialMaterialOverrides;
 
+  /// Gesture recognizers attached to the underlying iOS PlatformView
+  /// ([UiKitView]). Required when the view is embedded inside a scrollable so
+  /// the native SCNView can claim drag gestures (rotation) instead of the
+  /// parent scroll view stealing them. Pass e.g.
+  /// `{Factory<OneSequenceGestureRecognizer>(() => PanGestureRecognizer())}`.
+  /// When null, the platform view stays "lazy" (default behavior).
+  final Set<Factory<OneSequenceGestureRecognizer>>? gestureRecognizers;
+
   const Interactive3d({
     super.key,
     this.modelPath,
@@ -125,6 +135,7 @@ class Interactive3d extends StatefulWidget {
     this.backgroundColor = Colors.black,
     this.loadingWidget,
     this.initialMaterialOverrides,
+    this.gestureRecognizers,
   });
 
   @override
@@ -216,6 +227,10 @@ class Interactive3dState extends State<Interactive3d> {
       },
       creationParamsCodec: const StandardMessageCodec(),
       onPlatformViewCreated: _onIOSPlatformViewCreated,
+      // When embedded in a scrollable, these let the native SCNView win drag
+      // gestures (rotation) over the parent scroll view.
+      gestureRecognizers:
+          widget.gestureRecognizers ?? const <Factory<OneSequenceGestureRecognizer>>{},
     );
   }
 
