@@ -9,7 +9,9 @@ buildscript {
 
     dependencies {
         classpath("com.android.tools.build:gradle:8.3.0")
-        // Kotlin Gradle Plugin is bundled by AGP 9.0 / Flutter 3.44+, no manual classpath needed.
+        // Plugin Kotlin Gradle ajoute au classpath pour pouvoir l'appliquer
+        // explicitement (cf. plus bas). Version alignee sur l'app consommatrice.
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.10")
     }
 }
 
@@ -21,6 +23,16 @@ allprojects {
 }
 
 apply plugin: "com.android.library"
+
+// Applique le plugin Kotlin de maniere EXPLICITE et idempotente. Ce projet
+// s'appuyait sur l'injection automatique de Flutter/AGP, qui n'a PAS lieu sur
+// tous les toolchains (ex. Windows) -> le bloc kotlin {} plus bas echouait avec
+// "Could not find method kotlin()". Le guard (les 2 ids possibles) evite un
+// double-apply la ou Kotlin est deja injecte (ex. macOS).
+if (!project.plugins.hasPlugin("org.jetbrains.kotlin.android") &&
+    !project.plugins.hasPlugin("kotlin-android")) {
+    apply plugin: "org.jetbrains.kotlin.android"
+}
 
 android {
     namespace = "com.example.interactive_3d"
