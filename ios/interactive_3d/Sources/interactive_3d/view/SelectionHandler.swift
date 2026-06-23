@@ -67,9 +67,19 @@ class SelectionHandler {
             originalMaterials[node] = material.copy() as? SCNMaterial
         }
         let color = resolveColor(for: nodeName)
+        // NeoSelf: rendu « muscle peint » qui CONSERVE le relief.
+        // Auparavant une emission forte (0.3 — auto-illumination qui ignore
+        // l'éclairage) + un multiply coloré (qui écrase les canaux vert/bleu)
+        // aplatissaient le muscle et sur-saturaient la couleur → « on ne voit
+        // plus la forme ». On garde le diffuse éclairé (Blinn), comme le corps
+        // blanc, avec une emission très légère (lisibilité dans l'ombre) et un
+        // multiply neutre (blanc) qui ne touche plus à la saturation.
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        color.getRed(&r, green: &g, blue: &b, alpha: &a)
         material.diffuse.contents = color
-        material.emission.contents = color.withAlphaComponent(0.3)
-        material.multiply.contents = color
+        material.emission.contents = UIColor(
+            red: r * 0.08, green: g * 0.08, blue: b * 0.08, alpha: 1.0)
+        material.multiply.contents = UIColor.white
     }
 
     /// Applies cache highlight color to a geometry node.
